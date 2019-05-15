@@ -20,6 +20,8 @@
 #include <string> 
 #include <sstream>
 
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
 
 int check_element_in_vector(const int element, const VectorXi &vec_check)
 {
@@ -93,6 +95,91 @@ bool read_all_pose(const std::string trajectory_file, const int total_img_number
     else
       return false;
 }
+
+
+bool read_all_pose(const std::string trajectory_file, const int total_img_number, const std::vector<std::string> &img_names ,  Eigen::MatrixXf& all_poses)
+{
+    if (std::ifstream(trajectory_file))
+    {
+      all_poses.resize(total_img_number,12);
+      std::ifstream fPoses;    
+      fPoses.open(trajectory_file.c_str());
+      int counter=0;
+      while(!fPoses.eof()){
+	  std::string s;
+	  std::getline(fPoses,s);
+	  if(!s.empty()){
+	      std::stringstream ss;
+	      ss << s;
+	      float t;
+	      for (int i=0;i<12;i++){
+		  ss >> t;  
+		  all_poses(counter,i)=t;
+	      }
+	      counter++;
+	      if (counter>=total_img_number)
+		break;
+	  }
+      }
+      fPoses.close();
+      return true;
+    }
+    else
+      return false;
+}
+
+bool read_rvm_prior(const std::string label_pc_txt, pcl::PointCloud<pcl::PointXYZ> & pc_xyz_global , MatrixXf_row & frame_label_prob) {
+    if (std::ifstream(label_pc_txt))
+    {
+      
+      std::ifstream f_priors;    
+      f_priors.open(label_pc_txt.c_str());
+      int counter=0;
+      while(!f_priors.eof()){
+	  std::string s;
+	  std::getline(f_priors,s);
+	  if(!s.empty()){
+	      std::stringstream ss;
+	      ss << s;
+	      double t;
+              pcl::PointXYZ pt;
+              ss >> pt.x;
+              ss >> pt.y;
+              ss >> pt.z;
+              pc_xyz_global.push_back(pt);
+	      for (int i=0;i<11;i++){
+		  ss >> t;  
+                  frame_label_prob(counter,i)=(float)t;
+               }
+              counter++;
+              
+
+	  }
+          
+      }
+      f_priors.close();
+      return true;
+    }
+    else
+      return false;
+    
+}
+
+bool read_img_names(const std::string &img_name_file, std::vector<std::string> &names) {
+    std::ifstream f_names;
+    names.clear();
+    f_names.open(img_name_file.c_str());
+    int counter=0;
+    std::string s;
+    while(f_names >> s){
+        names.push_back(s);
+        counter ++;
+    }
+    f_names.close();    
+    
+    
+}
+
 
 bool read_label_prob(const std::string label_txt, MatrixXf_row& frame_label_prob)  // assumed mat size correct
 {

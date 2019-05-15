@@ -6,14 +6,17 @@ data_root='';
 cnn_to_ours_conversion=[1,4,2,6,9,3,7,10,11,5,8];  % old 1-11  to our new 1-11
 num_labels=11;
 
-num_img = length(dir([data_root 'label_2d_bin/' '*.bin']));
+num_img = length(dir([data_root 'label_2d_bin_raw/' '*.bin']));
+files = dir([data_root 'label_2d_bin_raw/' '*.bin'])
+disp(files)
+for frame_id=1:num_img  % I will minus -1
+    bin_name = files(frame_id).name
+    file_name = bin_name(1:6)
+    fprintf('processing %s \n', file_name );
 
-for frame_id=1:numimg  % I will minus -1
-    fprintf('processing %d out of %d \n',frame_id,500);
-    
     %% change label image
-    raw_cnn_img_file=[data_root 'label_2d_img_raw/' sprintf('%06d',frame_id-1) '_bw.png'];  % raw output from dilanetCNN.
-    new_cnn_img_file=[data_root 'label_2d_img/' sprintf('%06d',frame_id-1) '_bw.png'];
+    raw_cnn_img_file=[data_root 'label_2d_img_raw/' file_name '_bw.png'];  % raw output from dilanetCNN.
+    new_cnn_img_file=[data_root 'label_2d_img/' file_name '_bw.png'];
     raw_cnn_img = imread(raw_cnn_img_file);  % start from 0 - 10
     raw_cnn_img = raw_cnn_img+1; % 1-11
     for row=1:size(raw_cnn_img,1)
@@ -29,8 +32,8 @@ for frame_id=1:numimg  % I will minus -1
     img_width = size(raw_cnn_img,2);
     
     %% change label binary file
-    raw_cnn_bin_file=[data_root 'label_2d_bin_raw/' sprintf('%06d',frame_id-1) '.bin'];  % all pixels' (row order) label distribution
-    new_cnn_bin_file=[data_root 'label_2d_bin/' sprintf('%06d',frame_id-1) '.bin'];
+    raw_cnn_bin_file=[data_root 'label_2d_bin_raw/' file_name '.bin'];  % all pixels' (row order) label distribution
+    new_cnn_bin_file=[data_root 'label_2d_bin/' file_name '.bin'];
     
     fd = fopen(raw_cnn_bin_file,'r');
     U = fread(fd,img_height*img_width*num_labels,'single');  % single  for float   double.

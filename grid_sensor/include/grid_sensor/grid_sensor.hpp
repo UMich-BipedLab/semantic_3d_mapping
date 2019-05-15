@@ -123,6 +123,11 @@ class GridSensor {
 		       const Eigen::Matrix4f& transToWorld);   
   void AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img,const cv::Mat& depth_img, const cv::Mat& superpixel_img, 
 			  const Eigen::Matrix4f pose,MatrixXf_row& frame_label_prob); // pose is 12*1    possibly add label data here
+
+    void AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,
+                                  const pcl::PointCloud<pcl::PointXYZ> & cloud_curr_frame_global,
+                                  const Eigen::Matrix4f transToWorld, MatrixXf_row& frame_label_prob);
+    
   void reproject_to_images(int current_index);
   
   MatrixXf_men pixels_to_gridmem;  // store each pixel's correspondence to 3D occupancy grid memory index
@@ -225,6 +230,10 @@ class GridSensor {
   float appear_z_stddev=40;
   float appear_rgb_stddev=4;
   float appear_weight=10;
+
+
+  // writing evalutated points to pcd
+  //PointCloudXYZ pc_xyz_to_be_evaluated;
 	 
 };
 

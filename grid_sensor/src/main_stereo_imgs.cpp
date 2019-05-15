@@ -6,6 +6,7 @@
 #include <string> 
 #include <sstream>
 #include <ctime>
+#include <vector>
 
 
 using namespace std;
@@ -18,9 +19,11 @@ public:
       {
 	  n.param ("kitti/img_root_folder", img_root_folder, img_root_folder);	  
 	  n.param ("kitti/raw_img_folder", raw_img_folder, raw_img_folder); 
-	  n.param ("kitti/depth_img_folder", depth_img_folder, depth_img_folder);	  
+	  n.param ("kitti/depth_img_folder", depth_img_folder, depth_img_folder);
+          n.param ("kitti/label_rvm_folder", label_rvm_folder ,label_rvm_folder);
 	  n.param ("kitti/trajectory_file", trajectory_file, trajectory_file);
-	  
+          n.param("kitti/img_names_file", img_names_file, img_names_file);
+          
 	  n.param ("kitti/label_root_folder", label_root_folder, label_root_folder);
 	  n.param ("kitti/label_bin_folder", label_bin_folder, label_bin_folder);
 	  n.param ("kitti/superpixel_bin_folder", superpixel_bin_folder, superpixel_bin_folder);
@@ -28,9 +31,10 @@ public:
 	  n.param ("kitti/evaluation_img_list", truth_img_list_file, truth_img_list_file);
 	  n.param ("kitti/superpixel_img_folder", superpixel_img_folder, superpixel_img_folder);
 	  n.param ("kitti/reproj_label_folder", saving_reproj_img_folder, saving_reproj_img_folder);
-	  
+          
 	  n.param ("save_proj_imgs", save_proj_imgs, save_proj_imgs);
 	  n.param ("use_crf_optimize", use_crf_optimize, use_crf_optimize);
+          n.param ("use_rvm", use_rvm, use_rvm);
     
 	  raw_img_folder = img_root_folder + raw_img_folder;
 	  depth_img_folder = img_root_folder + depth_img_folder;
@@ -41,25 +45,29 @@ public:
 	  truth_img_list_file = label_root_folder + truth_img_list_file;
 	  superpixel_img_folder = label_root_folder + superpixel_img_folder;
 	  saving_reproj_img_folder = label_root_folder + saving_reproj_img_folder;
-	  
+          prior_pc_folder = label_root_folder + label_rvm_folder;
+	  img_names_file = img_root_folder + img_names_file;
 	  
 	  grid_sensor = new ca::GridSensor(n);
 	  grid_visualizer = new ca::GridVisualizer(nh);
 
-	  img_couter=0;
+	  img_counter=0;
 	  total_img_ind=1000;
+          //read_img_names(img_names_file, img_names);
+          //total_img_ind = img_names.size();
+          //std::cout<<"Read img: # is "<<total_img_ind<<std::endl;
 	  
-	  image_width = 1226;
-	  image_height = 370;
-	  calibration_mat<<707.0912, 0, 601.8873, // kitti sequence 5
-			  0, 707.0912, 183.1104,
-			  0,   0,   1;
+	  //image_width = 1226;
+	  //image_height = 370;
+          //	  calibration_mat<<707.0912, 0, 601.8873, // kitti sequence 5
+          //			  0, 707.0912, 183.1104,
+          //		  0,   0,   1;
 
-// 	  image_width = 1241;
-// 	  image_height = 376;
-// 	  calibration_mat<<718.856, 0, 607.1928, // kitti sequence 15
-// 			   0, 718.856, 185.2157,
-// 			   0,   0,   1;
+ 	  image_width = 1241;
+ 	  image_height = 376;
+ 	  calibration_mat<<718.856, 0, 607.1928, // kitti sequence 15
+ 			   0, 718.856, 185.2157,
+ 			   0,   0,   1;
 	  
 	  grid_sensor->set_up_calibration(calibration_mat,image_height,image_width);
 	  
@@ -69,6 +77,8 @@ public:
 		    0, 0, 0, 1;
 	  if (!read_all_pose(trajectory_file,total_img_ind+1,all_poses))    // poses of each frame
 		ROS_ERROR_STREAM("cannot read file "<<trajectory_file);
+          else
+              ROS_INFO_STREAM("finish reading trajectory "<<trajectory_file);
 	  
 	  // set up label to color
 	  frame_label_prob.resize(image_width*image_height,num_class);
@@ -84,10 +94,11 @@ public:
     //     	     ROS_ERROR_STREAM("depth_img_name  "<<depth_img_name);
 		Eigen::Matrix4f curr_transToWolrd;   // a camera space point multiplied by this, goes to world frame.
 		curr_transToWolrd.setIdentity();
+                std::cout<<"evalution image list length "<<evaluation_image_list.rows()<<std::endl;
 		for (int ind=0;ind<evaluation_image_list.rows();ind++)
 		{
-		    int img_couter=evaluation_image_list[ind];
-		    VectorXf curr_posevec=all_poses.row(img_couter);
+		    int img_counter=evaluation_image_list[ind];
+		    VectorXf curr_posevec=all_poses.row(img_counter);
 		    MatrixXf crf_label_eigen = Eigen::Map<MatrixXf_row>(curr_posevec.data(),3,4);
 		    curr_transToWolrd.block(0,0,3,4) = crf_label_eigen;
 		    curr_transToWolrd=init_trans_to_ground*curr_transToWolrd;
@@ -105,7 +116,12 @@ public:
       std::string raw_img_folder,depth_img_folder, label_bin_folder,trajectory_file,superpixel_bin_folder;
       std::string label_img_folder, truth_img_list_file,superpixel_img_folder;
       std::string saving_reproj_img_folder;
-      bool save_proj_imgs,use_crf_optimize;
+    std::string prior_pc_folder;
+    std::string label_rvm_folder;
+    std::string img_names_file;
+    std::vector<std::string> img_names;
+    bool save_proj_imgs,use_crf_optimize;
+    bool use_rvm;
       
       ca::GridSensor* grid_sensor;
       ca::GridVisualizer* grid_visualizer;
@@ -116,7 +132,7 @@ public:
       {
 	    if (exceed_total)
 		  return;
-	    if (img_couter>total_img_ind)
+	    if (img_counter>total_img_ind)
 	    {
 	      ROS_ERROR_STREAM("Exceed maximum images");
 	      exceed_total=true;
@@ -124,8 +140,9 @@ public:
 	    }
 
 	    char frame_index_c[256];
-	    sprintf(frame_index_c,"%06d",img_couter);  // format into 6 digit
+	    sprintf(frame_index_c,"%06d",img_counter);  // format into 6 digit
 	    std::string frame_index(frame_index_c);
+            //std::string frame_index = img_names[img_counter];
 
 	    std::string img_left_name=raw_img_folder+frame_index+".png";
 	    std::string depth_img_name=depth_img_folder+frame_index+".png"; 
@@ -133,75 +150,88 @@ public:
 	    std::string superpixel_bin_name=superpixel_bin_folder+frame_index+".bin";
 	    std::string superpixel_img_name=superpixel_img_folder+frame_index+".png";
 	    std::string label_img_name=label_img_folder+frame_index+"_color.png";
+            std::string prior_pc_xyz_name=prior_pc_folder+frame_index+".txt";
 	    
 	    cv::Mat raw_left_img = cv::imread(img_left_name, 1);    //rgb data
 	    cv::Mat depth_img = cv::imread(depth_img_name, CV_LOAD_IMAGE_ANYDEPTH);      //CV_16UC1
 	    cv::Mat label_img = cv::imread(label_img_name, 1);    //label rgb color image
 	    cv::Mat superpixel_img = cv::imread(superpixel_img_name, 1);    //label rgb color image
+            pcl::PointCloud<pcl::PointXYZ> prior_pc_xyz;
 	    if(raw_left_img.data)                             // Check for invalid input
-		std::cout <<  "read image  "<<frame_index_c << std::endl ;	      
+		std::cout <<  "read image  "<<frame_index << std::endl ;	      
 	    else{
+                img_counter++;
 		std::cout<<"cannot read left image  "<<img_left_name<<std::endl;
 		return;
-    	     }
+            }
 	    if(!depth_img.data){                             // Check for invalid input		
 		std::cout<<"cannot read depth image  "<<depth_img_name<<std::endl;
+                img_counter++;
 		return;
-    	     }
+            }
+            if (use_rvm) {
+                read_rvm_prior(prior_pc_xyz_name, prior_pc_xyz, frame_label_prob);
+                std::cout<<"read rvm prior "<<prior_pc_xyz_name <<"\n";
+            }
+
 	    Eigen::Matrix4f curr_transToWolrd;   // a camera space point multiplied by this, goes to world frame.
 	    curr_transToWolrd.setIdentity();
-	    VectorXf curr_posevec=all_poses.row(img_couter);
+	    VectorXf curr_posevec=all_poses.row(img_counter);
 	    MatrixXf crf_label_eigen = Eigen::Map<MatrixXf_row>(curr_posevec.data(),3,4);
 	    curr_transToWolrd.block(0,0,3,4) = crf_label_eigen;
 	    curr_transToWolrd=init_trans_to_ground*curr_transToWolrd;
 // 	    curr_transToWolrd(2,3)=1.0; // HACK set height to constant
 	    
-	    if (!read_label_prob_bin(label_bin_name,frame_label_prob))
+	    if (use_rvm == false && !read_label_prob_bin(label_bin_name,frame_label_prob))
 	    {
 		  ROS_ERROR_STREAM("cannot read label file "<<label_bin_name);
 		  exceed_total=true;
 		  if (use_crf_optimize)
 		      return;
 	    }
-	    grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy	    
+            if (use_crf_optimize)
+                grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy
+            if (use_rvm)
+                grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img, prior_pc_xyz, curr_transToWolrd,  frame_label_prob);  // update grid's occupancy value and label probabitliy
 
-	    if (img_couter%crf_skip_frames==0)  // test CRF every 4 frames
+	    if (img_counter%crf_skip_frames==0)  // test CRF every 4 frames
 		if (use_crf_optimize)
 		    grid_sensor->CRF_optimization(superpixel_bin_name);
 	    
-	    grid_visualizer->publishObstCloud(use_crf_optimize); //use_crf_optimize
+	    grid_visualizer->publishObstCloud(use_crf_optimize || use_rvm); //use_crf_optimize
 
 	    if (save_proj_imgs) // for evaluation purpose
 	    {
-	      int img_in_vec = check_element_in_vector(img_couter,evaluation_image_list);
+	      int img_in_vec = check_element_in_vector(img_counter,evaluation_image_list);
 	      if (img_in_vec >= 0)
 		  grid_sensor->actual_depth_imgs[img_in_vec]=depth_img.clone();  // set depth
-	      if ( (img_in_vec>= 0) || (img_couter %4 ==0))  // re-project every four frames. projecting every frame takes much time.
+	      if ( (img_in_vec>= 0) )//|| (img_counter %4 ==0))  // re-project every four frames. projecting every frame takes much time.
 	      {
-		  ROS_INFO_STREAM("reproject images at  "<<img_couter);
-		  grid_sensor->reproject_to_images(img_couter);  // project onto all past poses
+		  ROS_INFO_STREAM("reproject images at  "<<img_counter);
+		  grid_sensor->reproject_to_images(img_counter);  // project onto all past poses
 	      }
 	      for (int ind=0;ind<evaluation_image_list.rows();ind++)  // save all past images
 	      {
-		  int img_couter_cc = evaluation_image_list[ind];
-		  if (img_couter_cc <= img_couter)
+		  int img_counter_cc = evaluation_image_list[ind];
+		  if (img_counter_cc <= img_counter)
 		  {
 		      char frame_index_char[256];
-		      sprintf(frame_index_char,"%06d",img_couter_cc);  // format into 6 digit
+		      sprintf(frame_index_char,"%06d",img_counter_cc);  // format into 6 digit
+                      std::cout<<" writing image #"<<frame_index_char<<", cc "<<img_counter_cc<<", ind "<<ind<<", img_in_vec "<<img_in_vec<<std::endl;
 		      std::string frame_index_str(frame_index_char);
 		      std::string reproj_label_img_bw_path=saving_reproj_img_folder+frame_index_str+"_bw.png";
 		      std::string reproj_label_img_color_path=saving_reproj_img_folder+frame_index_str+"_color.png";
 		      
 		      cv::imwrite( reproj_label_img_color_path, grid_sensor->reproj_label_colors[ind]);
 		      cv::imwrite( reproj_label_img_bw_path, grid_sensor->reproj_label_maps[ind]);
-		  }
+                   }
 	      }
 	    }
-	    img_couter++;
+	    img_counter++;
       }
       
-      int img_couter;
-      int total_img_ind;
+      int img_counter ;
+      int total_img_ind ;
       int image_width;
       int image_height;
 
@@ -229,7 +259,7 @@ int main(int argc, char *argv[]) {
       
       dataset_wrapper image_wrap;
       
-      ros::Rate loop_rate(10);// hz      
+      ros::Rate loop_rate(5);// hz      
 
       while (ros::ok())
       {

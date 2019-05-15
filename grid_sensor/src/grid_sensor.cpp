@@ -34,19 +34,23 @@ void GridSensor::preprocess_pose(ros::Time curr_time,const cv::Mat& rgb_img,cons
     // publish images
     cv_bridge::CvImage out_img_msg;
     out_img_msg.header.stamp=curr_time;
-        
+
+    ROS_DEBUG("resize rgb img...");
     cv::Mat rgb_img_small;
     cv::resize(rgb_img,rgb_img_small,cv::Size(), 0.5, 0.5);
     out_img_msg.image=rgb_img_small;
     out_img_msg.encoding=sensor_msgs::image_encodings::TYPE_8UC3; 
     raw_img_pub.publish(out_img_msg.toImageMsg());
-            
+
+    ROS_DEBUG("resize label img...");
     cv::Mat label_img_small;
     cv::resize(label_img,label_img_small,cv::Size(), 0.5, 0.5);
     out_img_msg.image=label_img_small;
     out_img_msg.encoding=sensor_msgs::image_encodings::TYPE_8UC3; 
-    raw_label_img_pub.publish(out_img_msg.toImageMsg());  
+    raw_label_img_pub.publish(out_img_msg.toImageMsg());
 
+    
+    ROS_DEBUG("resize superpixel rgb img...");
     cv::Mat superpixel_rgb_img_small;
     cv::resize(superpixel_rgb_img,superpixel_rgb_img_small,cv::Size(), 0.5, 0.5);
     out_img_msg.image=superpixel_rgb_img_small;
@@ -141,6 +145,142 @@ void GridSensor::AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img
 	      }
 	}
     }
+    float pix_depth_thre=0.5;
+ // project each grid onto the image, to get grid-to-pixel correspondence.each grid correspond to at most one pixel
+    Eigen::Matrix<float, 3, 1> grid_cell_w;
+    for (int i=grid3_->first_i();i<grid3_->last_i();i++)
+      for(int j=grid3_->first_j();j<grid3_->last_j();j++)
+	for(int k=grid3_->first_k();k<grid3_->last_k();k++){
+	  if (grid3_->is_inside_grid(ca::Vec3Ix(i,j,k))){
+		uint8_t val = proxy_->get(i,j,k,grid_cell_w);
+		if(val>CA_SG_BARELY_OCCUPIED){  // if an obstacles
+		      mem_ix_t gridmem=grid3_->grid_to_mem(ca::Vec3Ix(i,j,k));
+		      Vector3f local_pt=homo_to_real_coord_vec(transToWorld.inverse()*real_to_homo_coord_vec(grid_cell_w)); //curr_transToWolrd.inverse()
+		      if (local_pt(2)<0)  // on the back, don't project
+			continue;
+		      if (local_pt(2)>40) // don't project on too far away points.
+			continue;
+		      Vector2f reproj_pixels=homo_to_real_coord_vec(calibration_mat*local_pt); // u v  (x y)
+		      int x=int(reproj_pixels(0)); int y=int(reproj_pixels(1));
+		      if ( x<im_width &  x>=0 & y<im_height &  y>=0){
+			    pix_depth=(float) depth_img.at<uint16_t>(y,x);
+			    pix_depth=pix_depth/depth_scaling; // NOTE scale match when saved depth img
+			    if ( abs(local_pt(2)-pix_depth)<pix_depth_thre)   // multiple grid may map to same pixel....
+				pixels_to_gridmem(y,x) = gridmem;
+		      }
+		}
+	  }
+	}
+
+    proxy_->FreeWriteLock();
+    
+    point_cloud->header.frame_id="/world";
+    point_cloud->header.stamp=(ros::Time::now().toNSec() / 1000ull);
+    raw_cloud_pub.publish(*point_cloud);     // for visualization, we could use voxel filter 
+}
+
+ void GridSensor::AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,
+                              const pcl::PointCloud<pcl::PointXYZ> & cloud_curr_frame_global,
+                              const Eigen::Matrix4f transToWorld, MatrixXf_row& frame_label_prob) 
+{
+    if (!initialized_) {
+      Init();
+    }  
+    
+    if (!((frame_label_prob.array()>=0).all()))
+      ROS_ERROR_STREAM("rvm: detect negative element in initial probablity matrix");
+    
+    pc_count++;
+    ros::Time curr_time=ros::Time::now();  
+    assert(im_width == depth_img.cols);
+    assert(im_height == depth_img.rows);    
+    
+    // publish odom, tf, images and so on.
+    preprocess_pose(curr_time,rgb_img,label_rgb_img,superpixel_rgb_img,transToWorld);
+    
+    // just for visualization the cloud
+    CloudXYZRGB::Ptr point_cloud(new CloudXYZRGB());
+    point_cloud->header.frame_id = "/world";
+    point_cloud->header.stamp = (curr_time.toNSec() / 1000ull);        
+    
+    ScrollGrid();
+    
+    boost::function<void (int,int,int,bool)> upProb( boost::bind( &GridSensor::UpdateProbability, this, _1,_2,_3,_4 ) );    
+    proxy_->WaitForWriteLock();    
+    if (grid3_->is_inside_box(sensor_pos_))
+	sensor_pos_ijk_=grid3_->world_to_grid(sensor_pos_);
+
+    float pix_depth;
+    pcl::PointXYZRGB pt;        
+    
+    pixels_to_gridmem = MatrixXf_men::Ones(im_height,im_width)*(-1);  // according to test, different pixels may correspond to the same grids.
+    int pixlabel;
+    for (int i = 0; i < cloud_curr_frame_global.size(); i++) {
+        pcl::PointXYZ curr = cloud_curr_frame_global[i];
+	frame_label_prob.row(i).maxCoeff(&pixlabel);
+        pix_depth = fabs(curr.z  - transToWorld(2,3));
+	if (pixlabel == sky_label)  // NOTE don't project Sky label.
+	  continue;
+        if (grid3_->is_inside_box(sensor_pos_)) {
+            if (pix_depth>depth_ignore_thres) // NOTE don't update far points
+                continue;
+            ray_end_pos_<<curr.x, curr.y, curr.z;
+            ray_end_pos_ijk_ = grid3_->world_to_grid(ray_end_pos_);
+            //            point_cloud->points.push_back(curr);
+            if (grid3_->is_inside_grid(ray_end_pos_ijk_)) {
+                ca::occupancy_trace(sensor_pos_ijk_,ray_end_pos_ijk_,upProb);       // update occupancy value
+                // update corresponding grid color
+                mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
+		    
+                float old_count=count_array3_[gridmem];
+                //rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(curr.r,curr.g,curr.b) ) / (old_count+1);   // whether put in one big array
+                Vector_Xxf new_prob=frame_label_prob.row(i);
+                label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
+                label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
+                count_array3_[gridmem] = old_count+1;
+
+            }
+        }
+
+
+    }
+    /*
+    for (int32_t i=0; i<im_width*im_height; i++) {      // row by row
+	int ux=i % im_width; int uy=i / im_width;        
+	pix_depth=(float) depth_img.at<uint16_t>(uy,ux);
+	pix_depth=pix_depth/depth_scaling; // NOTE scale match when saved depth img
+
+	frame_label_prob.row(i).maxCoeff(&pixlabel);
+	if (pixlabel == sky_label)  // NOTE don't project Sky label.
+	  continue;
+	if (pix_depth>0.1){
+	      pt.z=pix_depth; pt.x=matx_to3d_(uy,ux)*pix_depth; pt.y=maty_to3d_(uy,ux)*pix_depth;
+	      Eigen::VectorXf global_pt=homo_to_real_coord_vec(transToWorld*Eigen::Vector4f(pt.x,pt.y,pt.z,1));  // change to global position
+	      pt.x=global_pt(0); pt.y=global_pt(1); pt.z=global_pt(2);
+	      pt.r = rgb_img.at<cv::Vec3b>(uy,ux)[2]; pt.g = rgb_img.at<cv::Vec3b>(uy,ux)[1]; pt.b = rgb_img.at<cv::Vec3b>(uy,ux)[0];	      
+// 	      point_cloud->points.push_back(pt);
+	      
+	      if (grid3_->is_inside_box(sensor_pos_)) {
+		  if (pix_depth>depth_ignore_thres) // NOTE don't update far points
+		    continue;
+		  ray_end_pos_<<pt.x, pt.y, pt.z;
+		  ray_end_pos_ijk_ = grid3_->world_to_grid(ray_end_pos_);
+		  if (grid3_->is_inside_grid(ray_end_pos_ijk_)) {
+		    ca::occupancy_trace(sensor_pos_ijk_,ray_end_pos_ijk_,upProb);       // update occupancy value
+		    // update corresponding grid color
+		    mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
+		    
+		    float old_count=count_array3_[gridmem];
+		    rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
+		    Vector_Xxf new_prob=frame_label_prob.row(i);
+		    label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
+		    label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
+		    count_array3_[gridmem] = old_count+1;
+
+		  }
+	      }
+	}
+    } */
     float pix_depth_thre=0.5;
  // project each grid onto the image, to get grid-to-pixel correspondence.each grid correspond to at most one pixel
     Eigen::Matrix<float, 3, 1> grid_cell_w;
@@ -375,7 +515,7 @@ void GridSensor::CRF_optimization(const string superpixel_bin_file)
       }
 }
 
-void GridSensor::reproject_to_images(int current_index)
+    void GridSensor::reproject_to_images(int current_index)
 {
       proxy_->WaitForWriteLock();
 
@@ -385,6 +525,7 @@ void GridSensor::reproject_to_images(int current_index)
       // TODO note that different pixel might retrieve the same 3D grid due to discretization
       float pix_depth;
       pcl::PointXYZRGB pt;
+      
       for (int id=0;id<reproject_depth_imgs.size();id++)
       {
 	  int proj_frame_id = reproj_frame_inds[id];
