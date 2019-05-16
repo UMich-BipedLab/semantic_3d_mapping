@@ -1,8 +1,8 @@
-use_rvm: false
+use_rvm: true
 
-use_crf_optimize: true
+use_crf_optimize: false
 crf_iterations  : 5
-use_high_order  : true
+use_high_order  : false
 save_proj_imgs  : false
 use_hierarchical_inference: true
 

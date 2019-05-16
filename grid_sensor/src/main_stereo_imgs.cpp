@@ -161,11 +161,11 @@ public:
 		std::cout <<  "read image  "<<frame_index << std::endl ;	      
 	    else{
                 img_counter++;
-		std::cout<<"cannot read left image  "<<img_left_name<<std::endl;
+		//std::cout<<"cannot read left image  "<<img_left_name<<std::endl;
 		return;
             }
 	    if(!depth_img.data){                             // Check for invalid input		
-		std::cout<<"cannot read depth image  "<<depth_img_name<<std::endl;
+		//std::cout<<"cannot read depth image  "<<depth_img_name<<std::endl;
                 img_counter++;
 		return;
             }
@@ -189,8 +189,8 @@ public:
 		  if (use_crf_optimize)
 		      return;
 	    }
-            if (use_crf_optimize)
-                grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy
+            if (use_crf_optimize) 
+                grid_sensor->AddDepthImg(frame_index, raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy
             if (use_rvm)
                 grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img, prior_pc_xyz, curr_transToWolrd,  frame_label_prob);  // update grid's occupancy value and label probabitliy
 

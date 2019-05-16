@@ -3,7 +3,7 @@
 
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
-
+#include <string>
 #include <ros/ros.h>
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
@@ -121,7 +121,7 @@ class GridSensor {
 
   void preprocess_pose(ros::Time timnow,const cv::Mat& rgb_img, const cv::Mat& label_img,const cv::Mat& superpixel_img, 
 		       const Eigen::Matrix4f& transToWorld);   
-  void AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img,const cv::Mat& depth_img, const cv::Mat& superpixel_img, 
+    void AddDepthImg(const std::string & img_name, const cv::Mat& rgb_img,const cv::Mat& label_rgb_img,const cv::Mat& depth_img, const cv::Mat& superpixel_img, 
 			  const Eigen::Matrix4f pose,MatrixXf_row& frame_label_prob); // pose is 12*1    possibly add label data here
 
     void AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,

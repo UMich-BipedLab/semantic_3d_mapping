@@ -1,7 +1,8 @@
 #include <grid_sensor/grid_sensor.hpp>
 #include <grid_sensor/util.hpp>
 #include<boost/unordered_map.hpp>  
-      
+#include <string>
+#include <iostream>
 namespace ca {
 
 typedef boost::unordered_map<mem_ix_t, int> map_gridTocrf;
@@ -73,7 +74,7 @@ void GridSensor::preprocess_pose(ros::Time curr_time,const cv::Mat& rgb_img,cons
     br.sendTransform(w_to_sensor_transform_);
 }
 
-void GridSensor::AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,
+    void GridSensor::AddDepthImg(const std::string& img_name, const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,
 				 const Eigen::Matrix4f transToWorld, MatrixXf_row& frame_label_prob) 
 {
     if (!initialized_) {
@@ -97,6 +98,11 @@ void GridSensor::AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img
     point_cloud->header.stamp = (curr_time.toNSec() / 1000ull);        
     
     ScrollGrid();
+
+    std::string pointcloud_global_file_name("pc_global/"+img_name + ".txt");
+    std::ofstream pc_global_outfile (pointcloud_global_file_name);
+    
+
     
     boost::function<void (int,int,int,bool)> upProb( boost::bind( &GridSensor::UpdateProbability, this, _1,_2,_3,_4 ) );    
     proxy_->WaitForWriteLock();    
@@ -138,6 +144,10 @@ void GridSensor::AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img
 		    rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
 		    Vector_Xxf new_prob=frame_label_prob.row(i);
 		    label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
+                    if (pc_global_outfile.is_open()) {
+                        pc_global_outfile << float(pt.x) <<" "<< (float) pt.y<< " " <<(float) pt.z<<" "<< (int) pixlabel <<"\n";
+
+                    }
 		    label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
 		    count_array3_[gridmem] = old_count+1;
 
