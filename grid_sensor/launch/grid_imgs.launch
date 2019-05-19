@@ -39,7 +39,7 @@
     # don't update too far noisy points
     <param name="depth_ignore_thres" value="20.0"/>
      
-    <node pkg="grid_sensor" type="stereo_img_node" name="stereo_img_node" output="screen" launch-prefix="gdb -ex run --args">
+    <node pkg="grid_sensor" type="stereo_img_node" name="stereo_img_node" output="screen" >
       <remap from="/raw_img_rgb" to ="/kitti/left/image_raw"/>
       <param name="pointCloudFrame" value="/camera_rgb_optical_frame" />
       <param name="worldFrame" value="/world" />

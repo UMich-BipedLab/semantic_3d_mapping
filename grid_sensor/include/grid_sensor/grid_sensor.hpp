@@ -127,6 +127,17 @@ class GridSensor {
     void AddDepthImg(const cv::Mat& rgb_img,const cv::Mat& label_rgb_img, const cv::Mat& depth_img, const cv::Mat& superpixel_rgb_img,
                                   const pcl::PointCloud<pcl::PointXYZ> & cloud_curr_frame_global,
                                   const Eigen::Matrix4f transToWorld, MatrixXf_row& frame_label_prob);
+    void BuildOccupancyMap(
+                           const std::string& img_name,
+                           const cv::Mat& rgb_img,
+                           const cv::Mat& label_rgb_img,
+                           const cv::Mat& depth_img,
+                           const cv::Mat& superpixel_rgb_img,
+                           const Eigen::Matrix4f transToWorld,
+                           MatrixXf_row& frame_label_prob
+                           );
+    void LabelFusion(const cv::Mat & depth, const Eigen::Matrix4f transToWorld, MatrixXf_row & frame_label_prob);
+
     
   void reproject_to_images(int current_index);
   

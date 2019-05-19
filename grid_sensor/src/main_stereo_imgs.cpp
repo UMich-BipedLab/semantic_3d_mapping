@@ -130,11 +130,9 @@ public:
       int crf_skip_frames=1;
       void process_frame()
       {
-	    if (exceed_total)
-		  return;
-	    if (img_counter>total_img_ind)
+	    if (exceed_total || img_counter>total_img_ind)
 	    {
-	      ROS_ERROR_STREAM("Exceed maximum images");
+	      ROS_INFO("Exceed maximum images");
 	      exceed_total=true;
 	      return;
 	    }
@@ -142,6 +140,7 @@ public:
 	    char frame_index_c[256];
 	    sprintf(frame_index_c,"%06d",img_counter);  // format into 6 digit
 	    std::string frame_index(frame_index_c);
+            std::cout<<"img_counter "<<img_counter<<", total_img_ind"<<total_img_ind<<std::endl;
             //std::string frame_index = img_names[img_counter];
 
 	    std::string img_left_name=raw_img_folder+frame_index+".png";
@@ -156,19 +155,31 @@ public:
 	    cv::Mat depth_img = cv::imread(depth_img_name, CV_LOAD_IMAGE_ANYDEPTH);      //CV_16UC1
 	    cv::Mat label_img = cv::imread(label_img_name, 1);    //label rgb color image
 	    cv::Mat superpixel_img = cv::imread(superpixel_img_name, 1);    //label rgb color image
-            pcl::PointCloud<pcl::PointXYZ> prior_pc_xyz;
-	    if(raw_left_img.data)                             // Check for invalid input
+            
+            /*
+	    if(raw_left_img.empty() )
 		std::cout <<  "read image  "<<frame_index << std::endl ;	      
-	    else{
-                img_counter++;
-		//std::cout<<"cannot read left image  "<<img_left_name<<std::endl;
-		return;
-            }
-	    if(!depth_img.data){                             // Check for invalid input		
-		//std::cout<<"cannot read depth image  "<<depth_img_name<<std::endl;
+	    else {
+                
+                std::cout<<" No raw img "<<img_left_name<<", rgb shape "<< raw_left_img.size()<<"\n";
                 img_counter++;
 		return;
             }
+
+            if ( depth_img.empty() ) {
+                std::cout<<"NO depth img data"<<depth_img_name<<"\n";
+                img_counter++;
+                return;
+                }*/
+	    if (use_rvm == false && !read_label_prob_bin(label_bin_name,frame_label_prob))
+	    {
+                ROS_ERROR_STREAM("cannot read label file "<<label_bin_name);
+                exceed_total=true;
+                //if (use_crf_optimize)
+                return;
+	    }
+
+            pcl::PointCloud<pcl::PointXYZ> prior_pc_xyz;
             if (use_rvm) {
                 read_rvm_prior(prior_pc_xyz_name, prior_pc_xyz, frame_label_prob);
                 std::cout<<"read rvm prior "<<prior_pc_xyz_name <<"\n";
@@ -180,25 +191,24 @@ public:
 	    MatrixXf crf_label_eigen = Eigen::Map<MatrixXf_row>(curr_posevec.data(),3,4);
 	    curr_transToWolrd.block(0,0,3,4) = crf_label_eigen;
 	    curr_transToWolrd=init_trans_to_ground*curr_transToWolrd;
-// 	    curr_transToWolrd(2,3)=1.0; // HACK set height to constant
-	    
-	    if (use_rvm == false && !read_label_prob_bin(label_bin_name,frame_label_prob))
-	    {
-		  ROS_ERROR_STREAM("cannot read label file "<<label_bin_name);
-		  exceed_total=true;
-		  if (use_crf_optimize)
-		      return;
-	    }
+
+            std::cout<<"Update map...\n";
             if (use_crf_optimize) 
-                grid_sensor->AddDepthImg(frame_index, raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy
-            if (use_rvm)
-                grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img, prior_pc_xyz, curr_transToWolrd,  frame_label_prob);  // update grid's occupancy value and label probabitliy
+                grid_sensor->AddDepthImg(frame_index, raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy from neural network prior
+            else if (use_rvm)
+                grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img, prior_pc_xyz, curr_transToWolrd,  frame_label_prob);  // update grid's occupancy value and label probabitliy from rvm
+            else {
+                grid_sensor->BuildOccupancyMap(frame_index, raw_left_img, label_img, depth_img, superpixel_img, curr_transToWolrd, frame_label_prob);
+                std::cout<<"Built Occup-map, ";
+                grid_sensor->LabelFusion(depth_img, curr_transToWolrd, frame_label_prob);
+                std::cout<<"Label Fusion complete\n";
+            }
 
 	    if (img_counter%crf_skip_frames==0)  // test CRF every 4 frames
 		if (use_crf_optimize)
 		    grid_sensor->CRF_optimization(superpixel_bin_name);
 	    
-	    grid_visualizer->publishObstCloud(use_crf_optimize || use_rvm); //use_crf_optimize
+	    grid_visualizer->publishObstCloud(true); //use_crf_optimize
 
 	    if (save_proj_imgs) // for evaluation purpose
 	    {
@@ -259,7 +269,7 @@ int main(int argc, char *argv[]) {
       
       dataset_wrapper image_wrap;
       
-      ros::Rate loop_rate(5);// hz      
+      ros::Rate loop_rate(2);// hz      
 
       while (ros::ok())
       {
