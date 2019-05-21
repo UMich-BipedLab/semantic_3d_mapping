@@ -31,6 +31,7 @@ public:
 	  n.param ("kitti/evaluation_img_list", truth_img_list_file, truth_img_list_file);
 	  n.param ("kitti/superpixel_img_folder", superpixel_img_folder, superpixel_img_folder);
 	  n.param ("kitti/reproj_label_folder", saving_reproj_img_folder, saving_reproj_img_folder);
+          n.param("kitti/num_eval_imgs",total_img_ind, total_img_ind);
           
 	  n.param ("save_proj_imgs", save_proj_imgs, save_proj_imgs);
 	  n.param ("use_crf_optimize", use_crf_optimize, use_crf_optimize);
@@ -56,25 +57,25 @@ public:
           //read_img_names(img_names_file, img_names);
           //total_img_ind = img_names.size();
           //std::cout<<"Read img: # is "<<total_img_ind<<std::endl;
-	  
-	  //image_width = 1226;
-	  //image_height = 370;
-          //	  calibration_mat<<707.0912, 0, 601.8873, // kitti sequence 5
-          //			  0, 707.0912, 183.1104,
-          //		  0,   0,   1;
-
+	  /*
+	  image_width = 1226;
+	  image_height = 370;
+          	  calibration_mat<<707.0912, 0, 601.8873, // kitti sequence 5
+          			  0, 707.0912, 183.1104,
+          		  0,   0,   1;
+          */        
  	  image_width = 1241;
  	  image_height = 376;
  	  calibration_mat<<718.856, 0, 607.1928, // kitti sequence 15
  			   0, 718.856, 185.2157,
  			   0,   0,   1;
-	  
+                  
 	  grid_sensor->set_up_calibration(calibration_mat,image_height,image_width);
 	  
 	  init_trans_to_ground<<1, 0, 0, 0,  
-		    0, 0, 1, 0,
-		    0,-1, 0, 1,
-		    0, 0, 0, 1;
+                                0, 0, 1, 0,
+                                0,-1, 0, 1,
+                                0, 0, 0, 1;
 	  if (!read_all_pose(trajectory_file,total_img_ind+1,all_poses))    // poses of each frame
 		ROS_ERROR_STREAM("cannot read file "<<trajectory_file);
           else
@@ -185,7 +186,8 @@ public:
                 std::cout<<"read rvm prior "<<prior_pc_xyz_name <<"\n";
             }
 
-	    Eigen::Matrix4f curr_transToWolrd;   // a camera space point multiplied by this, goes to world frame.
+            // a camera space point multiplied by this, goes to world frame.
+	    Eigen::Matrix4f curr_transToWolrd;   
 	    curr_transToWolrd.setIdentity();
 	    VectorXf curr_posevec=all_poses.row(img_counter);
 	    MatrixXf crf_label_eigen = Eigen::Map<MatrixXf_row>(curr_posevec.data(),3,4);
@@ -269,7 +271,7 @@ int main(int argc, char *argv[]) {
       
       dataset_wrapper image_wrap;
       
-      ros::Rate loop_rate(2);// hz      
+      ros::Rate loop_rate(5);// hz      
 
       while (ros::ok())
       {

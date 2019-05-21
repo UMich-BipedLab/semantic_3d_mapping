@@ -54,17 +54,17 @@ int get_sky_label()
 Eigen::MatrixXi get_label_to_color_matrix()
 {
   	Eigen::MatrixXi label_to_color(Vector_XXf().rows(),3);
-	label_to_color<<128,	0,	0,    // 1. building  // our 11 class  //TODO this conversion should be the same with all other places
-			128,	128,	128,  // 2. sky
-			128,	64,	128,  // 3. road
-			128,	128,	0,    // 4. vegetation
-			0,	0,	192,  // 5. sidewalk
-			64,	0,	128,  // 6. car
-			64,	64,	0,    // 7. pedestrian
-			0,	128,	192,  // 8 cyclist
-			192,	128,	128,  // 9. signate
-			64,	64,	128,  // 10. fence
-			192,	192,	128;  // 11. pole
+	label_to_color<<128,	0,	0,    // 0. building  // our 11 class  //TODO this conversion should be the same with all other places
+			128,	128,	128,  // 1. sky
+			128,	64,	128,  // 2. road
+			128,	128,	0,    // 3. vegetation
+			0,	0,	192,  // 4. sidewalk
+			64,	0,	128,  // 5. car
+			64,	64,	0,    // 6. pedestrian
+			0,	128,	192,  // 7 cyclist
+			192,	128,	128,  // 8. signate
+			64,	64,	128,  // 9. fence
+			192,	192,	128;  // 10. pole
 	return label_to_color;
 }
 
