@@ -2,9 +2,9 @@ use_rvm: false
 
 use_crf_optimize: true
 crf_iterations  : 5
-use_high_order  : false
+use_high_order  : true
 save_proj_imgs  : true
-use_hierarchical_inference: false
+use_hierarchical_inference: true
 
 smooth_xy_stddev: 0.2
 smooth_z_stddev: 0.2

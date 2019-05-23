@@ -57,19 +57,20 @@ public:
           //read_img_names(img_names_file, img_names);
           //total_img_ind = img_names.size();
           //std::cout<<"Read img: # is "<<total_img_ind<<std::endl;
-	  /*
+          /*
 	  image_width = 1226;
 	  image_height = 370;
           	  calibration_mat<<707.0912, 0, 601.8873, // kitti sequence 5
-          			  0, 707.0912, 183.1104,
-          		  0,   0,   1;
-          */        
+                      0, 707.0912, 183.1104,
+                      0,   0,   1;
+          */
+            
  	  image_width = 1241;
  	  image_height = 376;
  	  calibration_mat<<718.856, 0, 607.1928, // kitti sequence 15
  			   0, 718.856, 185.2157,
  			   0,   0,   1;
-                  
+            
 	  grid_sensor->set_up_calibration(calibration_mat,image_height,image_width);
 	  
 	  init_trans_to_ground<<1, 0, 0, 0,  

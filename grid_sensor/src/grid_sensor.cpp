@@ -339,7 +339,7 @@ namespace ca {
                         Vector_Xxf new_prob=frame_label_prob.row(i);
                         label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
                         if (pc_global_outfile.is_open()) {
-                            pc_global_outfile << float(pt.x) <<" "<< (float) pt.y<< " " <<(float) pt.z<<" "<< (int) pixlabel <<"\n";
+                            pc_global_outfile << float(pt.x) <<" "<< (float) pt.y<< " " <<(float) pt.z<<" "<< (int)pt.r<<" "<<(int)pt.g<<" "<<(int) pt.b<<" "<< (int) pixlabel <<"\n";
 
                         }
                         label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
@@ -729,6 +729,9 @@ namespace ca {
         // TODO note that different pixel might retrieve the same 3D grid due to discretization
         float pix_depth;
         pcl::PointXYZRGB pt;
+
+        std::string f_name("crf_pc/"+std::to_string(current_index) + ".txt");
+        std::ofstream outfile(f_name);
       
         for (int id=0;id<reproject_depth_imgs.size();id++)
             {
@@ -762,6 +765,12 @@ namespace ca {
                                                     Vector_Xxf label_prob_value = label_array3_[gridmem];
                                                     label_prob_value.maxCoeff(&max_label);
                                                     reproj_label_maps[id].at<uint8_t>(uy,ux) = (uint8_t)max_label;
+
+                                                    outfile << pt.x<<" "<<pt.y<<" "<<pt.z<<" ";
+
+                                                    for (int k = 0; k < label_prob_value.size(); k++)
+                                                        outfile<< label_prob_value(k)<<" ";
+                                                    outfile<<"\n";
 				    
                                                     reproj_label_colors[id].at<cv::Vec3b>(uy,ux)[0]=(uint8_t) label_to_color_mat(max_label,2);
                                                     reproj_label_colors[id].at<cv::Vec3b>(uy,ux)[1]=(uint8_t) label_to_color_mat(max_label,1);
@@ -774,6 +783,7 @@ namespace ca {
                             }
                     }
             }
+        outfile.close();
         proxy_->FreeWriteLock();
     }
 

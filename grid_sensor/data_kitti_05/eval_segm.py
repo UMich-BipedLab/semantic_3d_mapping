@@ -16,6 +16,9 @@ import  sys, os
 from scipy import misc as misc
 from collections import OrderedDict
 from sets import Set as set
+import matplotlib.pyplot as plt
+
+import pdb
 
 def pixel_accuracy(eval_segm, gt_segm):
     '''
@@ -76,6 +79,7 @@ def mean_IU_batch(eval_list, gt_list, class_to_ignore_set):
     Unions = OrderedDict()
 
     for i in range(len(eval_list)):
+        print("Img #{}".format(i))
         iu_curr_img = mean_IU_batch_single(eval_list[i], gt_list[i], Intersections, Unions, ignore_list)
         print("On Img #{}, the mIoU is {}".format(i, iu_curr_img))
 
@@ -106,7 +110,7 @@ def mean_IU_batch_single(eval_segm, gt_segm, Intersections, Unions, ignore_list)
     Unions:               the OrderedDict from class label to number that gt unions prediction
     ignore_list:          the set of labels that shall be ignored
     '''
-
+    
     check_size(eval_segm, gt_segm)
 
     # cl: the sorted list of unique classes in (gt union pred)
@@ -116,6 +120,8 @@ def mean_IU_batch_single(eval_segm, gt_segm, Intersections, Unions, ignore_list)
     eval_mask, gt_mask = extract_both_masks(eval_segm, gt_segm, cl, n_cl)
 
     IU = []#list([0]) * n_cl  # IoU of this iamge
+    print("")
+
 
     for i, c in enumerate(cl):
         curr_eval_mask = eval_mask[i, :, :]
@@ -138,7 +144,38 @@ def mean_IU_batch_single(eval_segm, gt_segm, Intersections, Unions, ignore_list)
 
         if n_ii > 0 and (not c in ignore_list):
             IU.append( n_ii / (t_i + n_ij - n_ii))
- 
+
+            # 
+            global show_mask_img
+            if show_mask_img == 1:
+                fig=plt.figure()
+                
+                ax_pred = fig.add_subplot(3, 1, 1)
+                ax_pred.title.set_text('class #{} Predition'.format(c))
+                ax_pred.axis('off')
+                plt.imshow(curr_eval_mask)
+                
+                ax_gt = fig.add_subplot(3, 1, 2)
+                ax_gt.title.set_text('\nclass #{} Ground Truth'.format(c))
+                ax_gt.axis('off')
+                plt.imshow(curr_gt_mask)
+
+                curr_eval_mask = curr_eval_mask.astype(np.bool)
+                curr_gt_mask = curr_gt_mask.astype(np.bool)
+                intersect = np.logical_and(curr_eval_mask, curr_gt_mask)
+                iou_mask = np.zeros(intersect.shape).astype(np.int)
+                iou_mask[intersect] = 255
+                gt_not_pred = np.logical_and(curr_gt_mask, ~curr_eval_mask)
+                pred_not_gt = np.logical_and(~curr_gt_mask, curr_eval_mask)
+                iou_mask[gt_not_pred] = 150
+                iou_mask[pred_not_gt] = 50
+                ax_iou = fig.add_subplot(3,1,3)
+                ax_iou.title.set_text('\nclass#{} IoU'.format(c))
+                plt.imshow(iou_mask)
+                plt.show()
+            
+            print('class #{} IU: {}'.format(c, IU[-1]))
+    print("=================================================")
     mean_IU_ = np.sum(IU) / len(IU)
     return mean_IU_
     #return IU
@@ -274,11 +311,14 @@ class EvalSegErr(Exception):
 if __name__ == "__main__":
     gt_folder = sys.argv[1]
     pred_folder = sys.argv[2]
+    show_mask_img = int(sys.argv[3])
     gt_list   = []
     pred_list = []
 
     ignore_list = set()
     ignore_list.add(255)
+    ignore_list.add(1)
+    ignore_list.add(8)
     for img_name in sorted(os.listdir(gt_folder)):
         if not img_name.endswith(".png"):
             continue
