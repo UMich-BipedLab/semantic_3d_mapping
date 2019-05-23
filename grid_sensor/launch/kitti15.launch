@@ -44,7 +44,7 @@
       <remap from="/raw_img_rgb" to ="/kitti/left/image_raw"/>
       <param name="pointCloudFrame" value="/camera_rgb_optical_frame" />
       <param name="worldFrame" value="/world" />
-      <param name="gridResolution" value="0.05" />  <!-- 0.05 -->
+      <param name="gridResolution" value="0.1" />  <!-- 0.05 -->
     </node>
     
     <node pkg="gridmapping2" type="gridmapping2_shared_gridmap_node" name="shared_gridmap" output="screen">
