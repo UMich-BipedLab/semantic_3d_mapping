@@ -1,6 +1,6 @@
 use_rvm: false
 
-use_crf_optimize: false
+use_crf_optimize: true
 crf_iterations  : 5
 use_high_order  : true
 save_proj_imgs  : true

@@ -34,7 +34,7 @@ namespace ca {
                                      const Eigen::Matrix4f& transToWorld){
 
 
-        // create w_to_sensor_transform_, usef for scroll grid....	
+        // create w_to_sensor_transform_, usef for scroll grid....
         static tf::TransformBroadcaster br;
         sensor_pos_<<transToWorld(0,3),transToWorld(1,3),transToWorld(2,3);    
         tf::Transform transform;
@@ -113,7 +113,7 @@ namespace ca {
                         mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
 		    
                         float old_count=count_array3_[gridmem];
-                        //rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
+                        rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
                         Vector_Xxf new_prob=frame_label_prob.row(i);
                         label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
                         //if (pc_global_outfile.is_open()) {
@@ -152,7 +152,7 @@ namespace ca {
     
         // publish odom, tf, images and so on.
         preprocess_pose(curr_time,rgb_img,label_rgb_img,superpixel_rgb_img,transToWorld);
-    
+
         // just for visualization the cloud
         CloudXYZRGB::Ptr point_cloud(new CloudXYZRGB());
         point_cloud->header.frame_id = "/world";
@@ -162,6 +162,7 @@ namespace ca {
 
         std::string pointcloud_global_file_name("pc_global/"+img_name + ".txt");
         std::ofstream pc_global_outfile (pointcloud_global_file_name);
+                            std::cout<<3<<std::endl;
     
         boost::function<void (int,int,int,bool)> upProb( boost::bind( &GridSensor::UpdateProbability, this, _1,_2,_3,_4 ) );    
         proxy_->WaitForWriteLock();    
@@ -176,6 +177,7 @@ namespace ca {
         int pixlabel;
     
         for (int32_t i=0; i<im_width*im_height; i++) {      // row by row
+
             int ux=i % im_width; int uy=i / im_width;        
             pix_depth=(float) depth_img.at<uint16_t>(uy,ux);
             pix_depth=pix_depth/depth_scaling; // NOTE scale match when saved depth img
@@ -203,7 +205,7 @@ namespace ca {
                         mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
 		    
                         float old_count=count_array3_[gridmem];
-                        rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
+                        //rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
                         //Vector_Xxf new_prob=frame_label_prob.row(i);
                         //label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
                         //if (pc_global_outfile.is_open()) {
@@ -217,6 +219,8 @@ namespace ca {
             }
         }
         float pix_depth_thre=0.5;
+        static int num_occupied = 0;
+        std::cout<<"write to grid_centorids\n";
         std::ofstream outfile("grid_centroids/" + img_name + ".txt");
         // project each grid onto the image, to get grid-to-pixel correspondence.each grid correspond to at most one pixel
         Eigen::Matrix<float, 3, 1> grid_cell_w; // global pt coordinate
@@ -227,6 +231,8 @@ namespace ca {
                     if (grid3_->is_inside_grid(ca::Vec3Ix(i,j,k))){
                         uint8_t val = proxy_->get(i,j,k,grid_cell_w);
                         if(val>CA_SG_BARELY_OCCUPIED){  // if an obstacles
+                          num_occupied ++;
+                          
                             outfile << grid_cell_w(0, 0) << ", "
                                     << grid_cell_w(1, 0) << ", "
                                     << grid_cell_w(2, 0) << "\n";
@@ -253,7 +259,7 @@ namespace ca {
         }
 
         proxy_->FreeWriteLock();
-    
+        std::cout<<"Num occupied point is "<< num_occupied<<std::endl;
         point_cloud->header.frame_id="/world";
         point_cloud->header.stamp=(ros::Time::now().toNSec() / 1000ull);
         outfile.close();
@@ -349,6 +355,8 @@ namespace ca {
                 }
             }
         }
+
+        static int grid_counter = 0;
         float pix_depth_thre=0.5;
         // project each grid onto the image, to get grid-to-pixel correspondence.each grid correspond to at most one pixel
         Eigen::Matrix<float, 3, 1> grid_cell_w;
@@ -358,6 +366,7 @@ namespace ca {
                     if (grid3_->is_inside_grid(ca::Vec3Ix(i,j,k))){
                         uint8_t val = proxy_->get(i,j,k,grid_cell_w);
                         if(val>CA_SG_BARELY_OCCUPIED){  // if an obstacles
+                          grid_counter += 1;
                             mem_ix_t gridmem=grid3_->grid_to_mem(ca::Vec3Ix(i,j,k));
                             Vector3f local_pt=homo_to_real_coord_vec(transToWorld.inverse()*real_to_homo_coord_vec(grid_cell_w)); //curr_transToWolrd.inverse()
                             if (local_pt(2)<0)  // on the back, don't project
@@ -377,7 +386,7 @@ namespace ca {
                 }
 
         proxy_->FreeWriteLock();
-    
+        std::cout<<"# of occupied grid is "<<grid_counter<<std::endl;
         point_cloud->header.frame_id="/world";
         point_cloud->header.stamp=(ros::Time::now().toNSec() / 1000ull);
         raw_cloud_pub.publish(*point_cloud);     // for visualization, we could use voxel filter 
@@ -415,7 +424,9 @@ namespace ca {
             sensor_pos_ijk_=grid3_->world_to_grid(sensor_pos_);
 
         float pix_depth;
-        pcl::PointXYZRGB pt;        
+        pcl::PointXYZRGB pt;
+
+        static int counter = 0;
     
         pixels_to_gridmem = MatrixXf_men::Ones(im_height,im_width)*(-1);  // according to test, different pixels may correspond to the same grids.
         int pixlabel;
@@ -435,57 +446,62 @@ namespace ca {
                     ca::occupancy_trace(sensor_pos_ijk_,ray_end_pos_ijk_,upProb);       // update occupancy value
                     // update corresponding grid color
                     mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
-		    
-                    float old_count=count_array3_[gridmem];
-                    //rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(curr.r,curr.g,curr.b) ) / (old_count+1);   // whether put in one big array
-                    Vector_Xxf new_prob=frame_label_prob.row(i);
-                    label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
-                    label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
-                    count_array3_[gridmem] = old_count+1;
+                    //if (counter == 30) {		    
+                      float old_count=count_array3_[gridmem];
+                      //rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(curr.r,curr.g,curr.b) ) / (old_count+1);   // whether put in one big array
+                      Vector_Xxf new_prob=frame_label_prob.row(i);
+
+
+                      label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
+                      label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
+                      count_array3_[gridmem] = old_count+1;
+                      //}
 
                 }
             }
 
 
         }
+        counter++;
         /*
-          for (int32_t i=0; i<im_width*im_height; i++) {      // row by row
+        for (int32_t i=0; i<im_width*im_height; i++) {      // row by row
           int ux=i % im_width; int uy=i / im_width;        
           pix_depth=(float) depth_img.at<uint16_t>(uy,ux);
           pix_depth=pix_depth/depth_scaling; // NOTE scale match when saved depth img
 
           frame_label_prob.row(i).maxCoeff(&pixlabel);
           if (pixlabel == sky_label)  // NOTE don't project Sky label.
-	  continue;
+            continue;
           if (pix_depth>0.1){
-          pt.z=pix_depth; pt.x=matx_to3d_(uy,ux)*pix_depth; pt.y=maty_to3d_(uy,ux)*pix_depth;
-          Eigen::VectorXf global_pt=homo_to_real_coord_vec(transToWorld*Eigen::Vector4f(pt.x,pt.y,pt.z,1));  // change to global position
-          pt.x=global_pt(0); pt.y=global_pt(1); pt.z=global_pt(2);
-          pt.r = rgb_img.at<cv::Vec3b>(uy,ux)[2]; pt.g = rgb_img.at<cv::Vec3b>(uy,ux)[1]; pt.b = rgb_img.at<cv::Vec3b>(uy,ux)[0];	      
-          // 	      point_cloud->points.push_back(pt);
+            pt.z=pix_depth; pt.x=matx_to3d_(uy,ux)*pix_depth; pt.y=maty_to3d_(uy,ux)*pix_depth;
+            Eigen::VectorXf global_pt=homo_to_real_coord_vec(transToWorld*Eigen::Vector4f(pt.x,pt.y,pt.z,1));  // change to global position
+            pt.x=global_pt(0); pt.y=global_pt(1); pt.z=global_pt(2);
+            pt.r = rgb_img.at<cv::Vec3b>(uy,ux)[2]; pt.g = rgb_img.at<cv::Vec3b>(uy,ux)[1]; pt.b = rgb_img.at<cv::Vec3b>(uy,ux)[0];	      
+            // 	      point_cloud->points.push_back(pt);
 	      
-          if (grid3_->is_inside_box(sensor_pos_)) {
-          if (pix_depth>depth_ignore_thres) // NOTE don't update far points
-          continue;
-          ray_end_pos_<<pt.x, pt.y, pt.z;
-          ray_end_pos_ijk_ = grid3_->world_to_grid(ray_end_pos_);
-          if (grid3_->is_inside_grid(ray_end_pos_ijk_)) {
-          ca::occupancy_trace(sensor_pos_ijk_,ray_end_pos_ijk_,upProb);       // update occupancy value
-          // update corresponding grid color
-          mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
-		    
-          float old_count=count_array3_[gridmem];
-          rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
-          Vector_Xxf new_prob=frame_label_prob.row(i);
-          label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
-          label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
-          count_array3_[gridmem] = old_count+1;
+            if (grid3_->is_inside_box(sensor_pos_)) {
+              if (pix_depth>depth_ignore_thres) // NOTE don't update far points
+                continue;
+              ray_end_pos_<<pt.x, pt.y, pt.z;
+              ray_end_pos_ijk_ = grid3_->world_to_grid(ray_end_pos_);
+              if (grid3_->is_inside_grid(ray_end_pos_ijk_)) {
 
+                // update corresponding grid color
+                mem_ix_t gridmem = grid3_->grid_to_mem(ray_end_pos_ijk_);
+		    
+                float old_count=count_array3_[gridmem];
+                rgb_array3_[gridmem] = ( (rgb_array3_[gridmem]*old_count) + Vector3f(pt.r,pt.g,pt.b) ) / (old_count+1);   // whether put in one big array
+                Vector_Xxf new_prob=frame_label_prob.row(i);
+                label_array3_[gridmem] = ( (label_array3_[gridmem]*old_count) + new_prob ) / (old_count+1); //or multiply as paper said
+                label_array3_[gridmem].normalize();   // (label_array3_[gridmem].sum())
+                count_array3_[gridmem] = old_count+1;
+
+              }
+            }
           }
-          }
-          }
-          } */
+        }*/
         float pix_depth_thre=0.5;
+        static int num_occupied_rvm = 0;
         // project each grid onto the image, to get grid-to-pixel correspondence.each grid correspond to at most one pixel
         Eigen::Matrix<float, 3, 1> grid_cell_w;
         for (int i=grid3_->first_i();i<grid3_->last_i();i++)
@@ -494,6 +510,7 @@ namespace ca {
                     if (grid3_->is_inside_grid(ca::Vec3Ix(i,j,k))){
                         uint8_t val = proxy_->get(i,j,k,grid_cell_w);
                         if(val>CA_SG_BARELY_OCCUPIED){  // if an obstacles
+                          num_occupied_rvm ++;
                             mem_ix_t gridmem=grid3_->grid_to_mem(ca::Vec3Ix(i,j,k));
                             Vector3f local_pt=homo_to_real_coord_vec(transToWorld.inverse()*real_to_homo_coord_vec(grid_cell_w)); //curr_transToWolrd.inverse()
                             if (local_pt(2)<0)  // on the back, don't project
@@ -513,7 +530,7 @@ namespace ca {
                 }
 
         proxy_->FreeWriteLock();
-    
+        std::cout<<"Num occupied cells is "<<num_occupied_rvm<<std::endl;
         point_cloud->header.frame_id="/world";
         point_cloud->header.stamp=(ros::Time::now().toNSec() / 1000ull);
         raw_cloud_pub.publish(*point_cloud);     // for visualization, we could use voxel filter 
@@ -670,7 +687,7 @@ namespace ca {
                                                          new PottsCompatibility( smooth_weight ) );
                         crf_grid_3d.addPairwiseBilateral( 0.1, 0.1, 0.1, appear_rgb_stddev, appear_rgb_stddev, 
                                                           appear_rgb_stddev, pose_mat_sp,rgb_mat_sp,new PottsCompatibility( appear_weight ));
-
+ 
                         crf_grid_3d.all_3d_superpixels_=grid_3d_superpixels;
 
                         crf_grid_output_prob = crf_grid_3d.inference(crf_iterations);
@@ -749,7 +766,7 @@ namespace ca {
                                         pix_depth=(float) actual_depth_imgs[id].at<uint16_t>(uy,ux);
                                         pix_depth=pix_depth/depth_scaling; // NOTE scale match when saved depth img
                                         if (pix_depth>0.1){
-                                            if (pix_depth>2*depth_ignore_thres) // NOTE don't update far points
+                                            if (pix_depth>depth_ignore_thres) // NOTE don't update far points
                                                 continue;
                                             pt.z=pix_depth; pt.x=matx_to3d_(uy,ux)*pix_depth; pt.y=maty_to3d_(uy,ux)*pix_depth;
                                             Eigen::VectorXf global_pt=homo_to_real_coord_vec(all_BodyToWorlds[id]*Eigen::Vector4f(pt.x,pt.y,pt.z,1));  // change to global position

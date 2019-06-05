@@ -7,7 +7,7 @@
 #include <sstream>
 #include <ctime>
 #include <vector>
-
+#include <algorithm>
 
 using namespace std;
 
@@ -53,7 +53,7 @@ public:
 	  grid_visualizer = new ca::GridVisualizer(nh);
 
 	  img_counter=0;
-	  total_img_ind=1000;
+	  //total_img_ind=1000;
           //read_img_names(img_names_file, img_names);
           //total_img_ind = img_names.size();
           //std::cout<<"Read img: # is "<<total_img_ind<<std::endl;
@@ -64,13 +64,13 @@ public:
                       0, 707.0912, 183.1104,
                       0,   0,   1;
           */
-            
+          
  	  image_width = 1241;
  	  image_height = 376;
  	  calibration_mat<<718.856, 0, 607.1928, // kitti sequence 15
  			   0, 718.856, 185.2157,
  			   0,   0,   1;
-            
+          
 	  grid_sensor->set_up_calibration(calibration_mat,image_height,image_width);
 	  
 	  init_trans_to_ground<<1, 0, 0, 0,  
@@ -104,7 +104,7 @@ public:
 		    MatrixXf crf_label_eigen = Eigen::Map<MatrixXf_row>(curr_posevec.data(),3,4);
 		    curr_transToWolrd.block(0,0,3,4) = crf_label_eigen;
 		    curr_transToWolrd=init_trans_to_ground*curr_transToWolrd;
-		    curr_transToWolrd(2,3)=1.0; // HACK set height to constant, otherwise bad for occupancy mapping.
+		    //curr_transToWolrd(2,3)=1.0; // HACK set height to constant, otherwise bad for occupancy mapping.
 		    grid_sensor->all_WorldToBodys[ind]=curr_transToWolrd.inverse();
 		    grid_sensor->all_BodyToWorlds[ind]=curr_transToWolrd;
 		}
@@ -132,10 +132,11 @@ public:
       int crf_skip_frames=1;
       void process_frame()
       {
-	    if (exceed_total || img_counter>total_img_ind)
+	    if (exceed_total || img_counter>total_img_ind )
 	    {
 	      ROS_INFO("Exceed maximum images");
 	      exceed_total=true;
+              //exit(0);
 	      return;
 	    }
 
@@ -157,7 +158,7 @@ public:
 	    cv::Mat depth_img = cv::imread(depth_img_name, CV_LOAD_IMAGE_ANYDEPTH);      //CV_16UC1
 	    cv::Mat label_img = cv::imread(label_img_name, 1);    //label rgb color image
 	    cv::Mat superpixel_img = cv::imread(superpixel_img_name, 1);    //label rgb color image
-            
+
             /*
 	    if(raw_left_img.empty() )
 		std::cout <<  "read image  "<<frame_index << std::endl ;	      
@@ -196,7 +197,7 @@ public:
 	    curr_transToWolrd=init_trans_to_ground*curr_transToWolrd;
 
             std::cout<<"Update map...\n";
-            if (use_crf_optimize) 
+            if (use_crf_optimize && !use_rvm) 
                 grid_sensor->AddDepthImg(frame_index, raw_left_img, label_img, depth_img,superpixel_img,curr_transToWolrd,frame_label_prob);  // update grid's occupancy value and label probabitliy from neural network prior
             else if (use_rvm)
                 grid_sensor->AddDepthImg(raw_left_img, label_img, depth_img,superpixel_img, prior_pc_xyz, curr_transToWolrd,  frame_label_prob);  // update grid's occupancy value and label probabitliy from rvm
